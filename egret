@@ -100,6 +100,8 @@ def push(db_url):
     doc['_id'] = '_design/' + doc['designname']
 
     for d in ['views', 'shows', 'updates', 'lists']:
+        if not os.path.exists(d):
+            continue
         doc[d] = {}
         for root, dirs, files in os.walk(d):
             for name in files:
