@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+# egret, http://github.com/mastbaum/egret
+# Andy Mastbaum (amastbaum@gmail.com), 2011
+
+import os
+import sys
+import re
+import json
+import httplib
+import mimetypes
+import base64
+
+def help():
+    print \
+'''Usage:
+
+    egret create
+    - Create directory structure for a new couch app
+
+    egret push db_url
+    - push couch app in cwd to the couchdb server
+
+    egret pushdata db_url file
+    - upload documents to the couchdb server. file must contain a list of
+      dictionaries, e.g. [{"_id": "foo", "bar": "baz"}, {...}]
+
+      (caveat: this uses the couchdb bulk document api, so all features apply
+      including not overwriting without the right _rev.)
+
+    egret createdb db_url
+    - create a database on the couchdb server. this is done automatically by
+      push and pushdata if necessary
+
+    In all cases, the format of db_url is (bracketed means optional):
+
+        [http(s)://][user:password@]server/dbname
+'''
+
+def create():
+    '''create the basic directory structure for a new couch app'''
+    for d in ['views', 'shows', 'updates', 'lists', 'attachments']:
+        os.mkdir(d)
+    with open('settings.json', 'w') as f:
+        f.write(json.dumps({'name': 'Project name', 'description': 'Description', 'designname': 'designname', 'language': 'javascript'}))
+
+def make_connection(db_url):
+    '''make an http(s) connection based on a url string. includes basic
+    authentication.
+    '''
+    match = re.match(r'((?P<protocol>.+):\/\/)?((?P<user>.+):(?P<pw>.+)?@)?(?P<url>.+)', db_url)
+    if not match:
+        print 'Error in db string'
+        sys.exit(1)
+
+    host, dbpath = match.group('url').split('/', 1)
+    if match.groups('protocol') == 'https':
+        conn = httplib.HTTPSConnection(host)
+    else:
+        conn = httplib.HTTPConnection(host)
+
+    headers = {'Content-type': 'application/json'}
+    if match.group('user'):
+        auth_string = base64.encodestring('%s:%s' % (match.group('user', match.group('pw'))))[:-1]
+        headers['Authorization'] = 'Basic %s' % auth_string
+
+    return conn, dbpath, headers
+
+def createdb(db_url):
+    '''create a new database on a couchdb server with url db_url'''
+    conn, dbpath, headers = make_connection(db_url)
+    conn.request('PUT', '/%s/' % dbpath, '', headers)
+    response = conn.getresponse()
+    print 'Server response:', response.status, response.reason
+    
+
+def pushdata(db_url, path):
+    '''push json documents listed in file at path to db at db_url. uses
+    couchdb bulk docs api.
+    '''
+    with open(path, 'r') as f:
+        docs = {'docs': json.load(f)}
+
+    conn, dbpath, headers = make_connection(db_url)
+    conn.request('GET', '/%s' % dbpath)
+    response = conn.getresponse()
+    if response.status == 404:
+        conn.request('PUT', '/%s/' % dbpath, '', headers)
+    conn, dbpath, headers = make_connection(db_url)
+    conn.request('POST', '/%s/_bulk_docs' % dbpath, json.dumps(docs), headers)
+    response = conn.getresponse()
+    print 'Server response:', response.status, response.reason
+
+def push(db_url):
+    '''push project to db at db_url, including design doc and any
+    attachments.
+    '''
+    with open('settings.json') as f:
+        doc = json.load(f)
+    doc['_id'] = '_design/' + doc['designname']
+
+    for d in ['views', 'shows', 'updates', 'lists']:
+        doc[d] = {}
+        for root, dirs, files in os.walk(d):
+            for name in files:
+                file_name = os.path.join(root, name)
+                path = file_name.split(os.path.sep, 1)[1].split(os.path.sep)
+                if len(path) == 1:
+                    fn_name = os.path.splitext(name)[0]
+                    with open(file_name, 'r') as f:
+                        doc[d][fn_name] = f.read()
+                elif len(path) == 2:
+                    key_name = path[0]
+                    fn_name = os.path.splitext(path[1])[0]
+                    with open(file_name, 'r') as f:
+                        doc[d][key_name] = {fn_name: f.read()}
+                else:
+                    print 'directory recursion depth (2) exceeded'
+                    sys.exit(1)
+
+    doc['_attachments'] = {}
+    for root, dirs, files in os.walk('attachments'):
+        for name in files:
+            file_name = os.path.join(root, name)
+            mime = mimetypes.guess_type(file_name)[0]
+            if mime is None:
+                mime = 'application/octet-stream'
+            with open(file_name, 'r') as f:
+                doc['_attachments'][file_name.split(os.path.sep)[1]] = {'content_type': mime, 'data': f.read().encode('base64')}
+
+    conn, dbpath, headers = make_connection(db_url)
+    conn.request('GET', '/%s/%s' % (dbpath, doc['_id']))
+    response = conn.getresponse()
+    if response.status == 200:
+        doc['_rev'] = json.loads(response.read())['_rev']
+    elif response.status == 404:
+        conn.request('PUT', '/%s/' % dbpath, '', headers)
+    conn, dbpath, headers = make_connection(db_url)
+    conn.request('PUT', '/%s/%s' % (dbpath, doc['_id']), json.dumps(doc), headers)
+    response = conn.getresponse()
+    print 'Server response:', response.status, response.reason
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        help()
+        sys.exit(1)
+    if sys.argv[1] == 'create':
+        create()
+    elif sys.argv[1] == 'createdb':
+        if len(sys.argv) != 3:
+            help()
+            sys.exit(1)
+        createdb(sys.argv[2])
+    elif sys.argv[1] == 'push':
+        if len(sys.argv) != 3:
+            help()
+            sys.exit(1)
+        push(sys.argv[2])
+    elif sys.argv[1] == 'pushdata':
+        if len(sys.argv) != 4:
+            help()
+            sys.exit(1)
+        pushdata(*sys.argv[2:])
+    else:
+        help()
+        sys.exit(1)
+
