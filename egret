@@ -126,7 +126,7 @@ def push(db_url):
             if mime is None:
                 mime = 'application/octet-stream'
             with open(file_name, 'r') as f:
-                doc['_attachments'][file_name.split(os.path.sep)[1]] = {'content_type': mime, 'data': f.read().encode('base64')}
+                doc['_attachments'][file_name.split(os.path.sep, 1)[1]] = {'content_type': mime, 'data': f.read().encode('base64')}
 
     conn, dbpath, headers = make_connection(db_url)
     conn.request('GET', '/%s/%s' % (dbpath, doc['_id']))
