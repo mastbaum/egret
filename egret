@@ -61,7 +61,7 @@ def make_connection(db_url):
 
     headers = {'Content-type': 'application/json'}
     if match.group('user'):
-        auth_string = base64.encodestring('%s:%s' % (match.group('user', match.group('pw'))))[:-1]
+        auth_string = base64.encodestring('%s:%s' % (match.group('user'), match.group('pw')))[:-1]
         headers['Authorization'] = 'Basic %s' % auth_string
 
     return conn, dbpath, headers
