@@ -115,7 +115,10 @@ def push(db_url):
                     key_name = path[0]
                     fn_name = os.path.splitext(path[1])[0]
                     with open(file_name, 'r') as f:
-                        doc[d][key_name] = {fn_name: f.read()}
+                        if key_name in doc[d]:
+                            doc[d][key_name][fn_name] = f.read()
+                        else:
+                           doc[d][key_name] = {fn_name: f.read()}
                 else:
                     print 'directory recursion depth (2) exceeded'
                     sys.exit(1)
