@@ -18,8 +18,9 @@ def help():
     egret create
     - Create directory structure for a new couch app
 
-    egret push db_url
-    - push couch app in cwd to the couchdb server
+    egret push db_url [--include-dotfiles]
+    - push couch app in cwd to the couchdb server. files beginning with '.' are
+      ignored unless the --include-dotfiles option is specified.
 
     egret pushdata db_url file
     - upload documents to the couchdb server. file must contain a list of
@@ -91,9 +92,11 @@ def pushdata(db_url, path):
     response = conn.getresponse()
     print 'Server response:', response.status, response.reason
 
-def push(db_url):
+def push(db_url, include_dotfiles=False):
     '''push project to db at db_url, including design doc and any
-    attachments.
+    attachments. include_dotfiles controls whether we try to push files
+    starting with a dot character, often swap files that don't base64
+    encode properly.
     '''
     with open('settings.json') as f:
         doc = json.load(f)
@@ -105,6 +108,8 @@ def push(db_url):
         doc[d] = {}
         for root, dirs, files in os.walk(d):
             for name in files:
+                if not include_dotfiles and name[0] == '.':
+                    continue
                 file_name = os.path.join(root, name)
                 path = file_name.split(os.path.sep, 1)[1].split(os.path.sep)
                 if len(path) == 1:
@@ -157,10 +162,13 @@ if __name__ == '__main__':
             sys.exit(1)
         createdb(sys.argv[2])
     elif sys.argv[1] == 'push':
-        if len(sys.argv) != 3:
+        if len(sys.argv) < 3 or len(sys.argv) > 4:
             help()
             sys.exit(1)
-        push(sys.argv[2])
+        if len(sys.argv) == 4 and sys.argv[3] == '--include-dotfiles':
+            push(sys.argv[2], True)
+        else:
+            push(sys.argv[2])
     elif sys.argv[1] == 'pushdata':
         if len(sys.argv) != 4:
             help()
