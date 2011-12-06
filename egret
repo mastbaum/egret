@@ -82,7 +82,7 @@ def pushdata(db_url, path):
         docs = {'docs': json.load(f)}
 
     conn, dbpath, headers = make_connection(db_url)
-    conn.request('GET', '/%s' % dbpath)
+    conn.request('GET', '/%s' % dbpath, headers=headers)
     response = conn.getresponse()
     if response.status == 404:
         conn.request('PUT', '/%s/' % dbpath, '', headers)
@@ -134,7 +134,7 @@ def push(db_url):
                 doc['_attachments'][file_name.split(os.path.sep, 1)[1]] = {'content_type': mime, 'data': f.read().encode('base64')}
 
     conn, dbpath, headers = make_connection(db_url)
-    conn.request('GET', '/%s/%s' % (dbpath, doc['_id']))
+    conn.request('GET', '/%s/%s' % (dbpath, doc['_id']), headers=headers)
     response = conn.getresponse()
     if response.status == 200:
         doc['_rev'] = json.loads(response.read())['_rev']
