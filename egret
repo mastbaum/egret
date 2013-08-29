@@ -40,7 +40,7 @@ def help():
 
 def create():
     '''create the basic directory structure for a new couch app'''
-    for d in ['views', 'shows', 'updates', 'lists', 'attachments']:
+    for d in ['views', 'shows', 'updates', 'lists', 'filters', 'attachments']:
         os.mkdir(d)
     with open('settings.json', 'w') as f:
         f.write(json.dumps({'name': 'Project name', 'description': 'Description', 'designname': 'designname', 'language': 'javascript'}))
@@ -102,7 +102,7 @@ def push(db_url, include_dotfiles=False):
         doc = json.load(f)
     doc['_id'] = '_design/' + doc['designname']
 
-    for d in ['views', 'shows', 'updates', 'lists']:
+    for d in ['views', 'shows', 'updates', 'lists', 'filters']:
         if not os.path.exists(d):
             continue
         doc[d] = {}
